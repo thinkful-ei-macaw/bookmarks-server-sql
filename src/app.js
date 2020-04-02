@@ -3,6 +3,7 @@ const express = require("express");
 const morgan = require("morgan");
 const cors = require("cors");
 const helmet = require("helmet");
+const ArticlesService = require("./articles-service");
 const { NODE_ENV } = require("./config");
 const winston = require("winston");
 const uuid = require("uuid/v4");
@@ -39,7 +40,7 @@ app.use(validateBearerToken);
 function validateBearerToken(req, res, next) {
   const apiToken = process.env.API_TOKEN;
   const authToken = req.get("Authorization");
-
+  console.log(authToken);
   if (!authToken || authToken.split(" ")[1] !== apiToken) {
     logger.error(`Unauthorized request to path: ${req.path}`);
     return res.status(401).json({
@@ -49,19 +50,27 @@ function validateBearerToken(req, res, next) {
   next();
 }
 
-app.get("/bookmarks", (req, res) => {
-  res.json(bookmarks);
+app.get("/bookmarks", (req, res, next) => {
+  const knexInstance = req.app.get("db");
+  ArticlesService.getAllArticles(knexInstance)
+    .then(articles => {
+      res.json(articles);
+    })
+    .catch(next);
 });
 
-app.get("/bookmark/:id", (req, res) => {
-  const { id } = req.params;
-  const bookmark = bookmarks.find(b => b.id === parseInt(id));
-
-  if (!bookmark) {
-    logger.error(`Bookmark with id ${id} not found.`);
-    return res.status(404).send("Bookmark Not Found");
-  }
-  res.json(bookmark);
+app.get("/bookmark/:id", (req, res, next) => {
+  const knexInstance = req.app.get("db");
+  ArticlesService.getById(knexInstance, req.params.id)
+    .then(article => {
+      if (!article) {
+        return res.status(404).json({
+          error: { message: `Bookmark doesn't exist` }
+        });
+      }
+      res.json(article);
+    })
+    .catch(next);
 });
 
 app.post("/bookmark", (req, res) => {
